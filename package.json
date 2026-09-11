@@ -1,0 +1,24 @@
+{
+  "name": "dental-clinic-system",
+  "version": "1.0.0",
+  "description": "Dental Clinic Management & Accounting Desktop Application",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT,ELECTRON\" -c \"blue,cyan,green\" \"npm run server\" \"npm run client\" \"wait-on http://127.0.0.1:5000/api/health && electron .\"",
+    "dev:web": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT\" -c \"blue,cyan\" \"npm run server\" \"npm run client\"",
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "seed": "npm --prefix server run seed",
+    "electron": "electron .",
+    "install-all": "npm install && npm --prefix server install && npm --prefix client install"
+  },
+  "keywords": ["dental", "clinic", "management", "accounting", "electron", "react"],
+  "author": "Antigravity",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.1",
+    "wait-on": "^8.0.1"
+  }
+}

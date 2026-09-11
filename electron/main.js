@@ -1,0 +1,135 @@
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const http = require('http');
+const fs = require('fs');
+
+let mainWindow;
+
+// Quick HTTP ping to verify Vite dev server is actually returning HTML
+function pingHttp(url) {
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: 1000 }, (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+async function getAvailableDevUrl() {
+  const ports = [5173, 5174, 5175];
+  for (const port of ports) {
+    const isLive = await pingHttp(`http://127.0.0.1:${port}/`);
+    if (isLive) {
+      console.log(`[Electron] Connected to live Vite dev server on port ${port}`);
+      return `http://127.0.0.1:${port}`;
+    }
+  }
+  return null;
+}
+
+async function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 840,
+    minWidth: 1024,
+    minHeight: 700,
+    backgroundColor: '#f8fafc',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false
+    },
+    title: 'Dental Clinic Management & Accounting',
+    show: false
+  });
+
+  const distPath = path.join(__dirname, '../client/dist/index.html');
+
+  // Gracefully fallback to local bundle if network load fails
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.warn(`[Electron] Page failed to load (${validatedURL}): ${errorDescription}. Falling back to local bundle...`);
+    if (fs.existsSync(distPath)) {
+      mainWindow.loadFile(distPath);
+    }
+  });
+
+  // Attempt to connect to dev server first, or load built dist files
+  let devUrl = await getAvailableDevUrl();
+
+  // Retry once if server is still starting up
+  if (!devUrl) {
+    await new Promise((r) => setTimeout(r, 1200));
+    devUrl = await getAvailableDevUrl();
+  }
+
+  if (devUrl) {
+    console.log(`[Electron] Loading dev server: ${devUrl}`);
+    mainWindow.loadURL(devUrl);
+  } else {
+    console.log(`[Electron] Dev server not active. Loading production bundle: ${distPath}`);
+    if (fs.existsSync(distPath)) {
+      mainWindow.loadFile(distPath);
+    } else {
+      console.error('[Electron] Error: Neither dev server nor client/dist/index.html was found.');
+    }
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // In case ready-to-show is delayed, ensure window is displayed
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 2000);
+
+  // Keyboard shortcuts (F12 to toggle DevTools)
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' && input.type === 'keyDown') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+app.whenReady().then(() => {
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+// Safe IPC Print / PDF handlers
+ipcMain.handle('print-receipt', async () => {
+  if (!mainWindow) return { success: false };
+  try {
+    mainWindow.webContents.print({ silent: false, printBackground: true });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
