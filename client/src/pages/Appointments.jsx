@@ -11,6 +11,20 @@ const getLocalDateStr = (d = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatTimeTo12Hour = (timeStr) => {
+  if (!timeStr) return '';
+  if (timeStr.toUpperCase().includes('AM') || timeStr.toUpperCase().includes('PM')) {
+    return timeStr;
+  }
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  const hour = parseInt(parts[0], 10);
+  const min = parts[1];
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour % 12 || 12;
+  return `${h12}:${min} ${period}`;
+};
+
 const Appointments = () => {
   const { showToast } = useClinic();
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -185,8 +199,7 @@ const Appointments = () => {
               <tr className="border-b border-slate-200 bg-slate-50/50 text-xs font-semibold text-slate-600">
                 <th className="py-3.5 px-6">Time</th>
                 <th className="py-3.5 px-6">Patient</th>
-                <th className="py-3.5 px-6">Treatment</th>
-                <th className="py-3.5 px-6">Doctor</th>
+                <th className="py-3.5 px-6">Treatment / Service</th>
                 <th className="py-3.5 px-6 text-center">Status</th>
                 <th className="py-3.5 px-6 text-right">Actions</th>
               </tr>
@@ -194,28 +207,31 @@ const Appointments = () => {
             <tbody className="divide-y divide-slate-100 text-sm">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="py-12 text-center text-slate-400">
+                  <td colSpan="5" className="py-12 text-center text-slate-400">
                     Loading appointments...
                   </td>
                 </tr>
               ) : appointments.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="py-12 text-center text-slate-400">
+                  <td colSpan="5" className="py-12 text-center text-slate-400">
                     No appointments scheduled for this date.
                   </td>
                 </tr>
               ) : (
                 appointments.map((apt) => (
                   <tr key={apt._id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-4 px-6 font-medium text-slate-800">{apt.time}</td>
+                    <td className="py-4 px-6 font-medium text-slate-800 whitespace-nowrap">
+                      {formatTimeTo12Hour(apt.time)}
+                    </td>
                     <td className="py-4 px-6">
                       <div className="font-medium text-slate-900">{apt.patientName || apt.patientId?.name || 'Patient'}</div>
                       {(apt.phone || apt.patientId?.phone) && (
                         <div className="text-xs text-slate-400">{apt.phone || apt.patientId?.phone}</div>
                       )}
                     </td>
-                    <td className="py-4 px-6 text-slate-700">{apt.serviceName}</td>
-                    <td className="py-4 px-6 text-slate-700">{apt.doctor}</td>
+                    <td className="py-4 px-6 text-slate-700">
+                      {apt.serviceName || (apt.serviceId?.name) || 'General Consultation'}
+                    </td>
                     <td className="py-4 px-6 text-center">{getStatusBadge(apt.status)}</td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">

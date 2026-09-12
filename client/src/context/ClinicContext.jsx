@@ -4,6 +4,10 @@ import { settingsAPI } from '../services/api';
 const ClinicContext = createContext(null);
 
 export const ClinicProvider = ({ children }) => {
+  const [fontTheme, setFontThemeState] = useState(() => {
+    return localStorage.getItem('dental_font_theme') || 'classic';
+  });
+
   const [settings, setSettings] = useState({
     clinicName: 'Dental Clinic',
     clinicAddress: 'Dental Care Center, Main Boulevard, Lahore',
@@ -11,11 +15,23 @@ export const ClinicProvider = ({ children }) => {
     email: 'info@dentalclinic.pk',
     currencySymbol: 'Rs.',
     currency: 'PKR',
-    receiptFooter: 'Thank you for choosing Dental Clinic.'
+    receiptFooter: 'Thank you for choosing Dental Clinic.',
+    fontTheme: 'classic'
   });
 
   const [toasts, setToasts] = useState([]);
   const [activeReceipt, setActiveReceipt] = useState(null);
+
+  // Apply font-theme to document element immediately
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-theme', fontTheme);
+    localStorage.setItem('dental_font_theme', fontTheme);
+  }, [fontTheme]);
+
+  const setFontTheme = (theme) => {
+    setFontThemeState(theme);
+    setSettings((prev) => ({ ...prev, fontTheme: theme }));
+  };
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -23,6 +39,9 @@ export const ClinicProvider = ({ children }) => {
         const res = await settingsAPI.get();
         if (res.success && res.data) {
           setSettings(res.data);
+          if (res.data.fontTheme) {
+            setFontThemeState(res.data.fontTheme);
+          }
         }
       } catch (err) {
         // Fallback to default
@@ -58,6 +77,8 @@ export const ClinicProvider = ({ children }) => {
       value={{
         settings,
         setSettings,
+        fontTheme,
+        setFontTheme,
         showToast,
         formatCurrency,
         printReceipt,

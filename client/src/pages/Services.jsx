@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { servicesAPI } from '../services/api';
 import AddServiceModal from '../components/AddServiceModal';
+import AssignTreatmentModal from '../components/AssignTreatmentModal';
 import { useClinic } from '../context/ClinicContext';
 
 const Services = () => {
@@ -11,6 +12,8 @@ const Services = () => {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignService, setAssignService] = useState(null);
 
   const loadServices = async () => {
     try {
@@ -129,19 +132,28 @@ const Services = () => {
                           {srv.status}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-right space-x-3 text-sm">
+                      <td className="py-4 px-6 text-right space-x-2 text-sm">
+                        <button
+                          onClick={() => {
+                            setAssignService(srv);
+                            setAssignModalOpen(true);
+                          }}
+                          className="font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md text-xs transition-colors"
+                          title="Assign Patient to this Service"
+                        >
+                          + Assign
+                        </button>
                         <button
                           onClick={() => handleEdit(srv)}
-                          className="font-medium text-slate-600 hover:text-emerald-700 transition-colors"
+                          className="font-medium text-slate-600 hover:text-emerald-700 text-xs px-2 py-1 rounded transition-colors"
                         >
                           Edit
                         </button>
-                        <span className="text-slate-300">|</span>
                         <button
                           onClick={() => handleToggleStatus(srv)}
-                          className={`font-medium transition-colors ${
+                          className={`font-medium text-xs px-2 py-1 rounded transition-colors ${
                             srv.status === 'Active'
-                              ? 'text-slate-600 hover:text-rose-600'
+                              ? 'text-slate-500 hover:text-rose-600'
                               : 'text-emerald-700 hover:text-emerald-800'
                           }`}
                         >
@@ -164,7 +176,18 @@ const Services = () => {
           setModalOpen(false);
           setEditingService(null);
         }}
-        initialData={editingService}
+        service={editingService}
+        onSuccess={loadServices}
+      />
+
+      {/* Assign Patient to Service Modal */}
+      <AssignTreatmentModal
+        isOpen={assignModalOpen}
+        onClose={() => {
+          setAssignModalOpen(false);
+          setAssignService(null);
+        }}
+        defaultServiceId={assignService?._id}
         onSuccess={loadServices}
       />
     </div>

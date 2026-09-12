@@ -5,6 +5,10 @@ const settingSchema = new mongoose.Schema({
     type: String,
     default: 'Dental Clinic'
   },
+  doctorName: {
+    type: String,
+    default: 'Dr. Tariq Khan'
+  },
   clinicAddress: {
     type: String,
     default: 'Suite 101, Dental Care Tower, Medical District'
@@ -28,6 +32,11 @@ const settingSchema = new mongoose.Schema({
   receiptFooter: {
     type: String,
     default: 'Thank you for visiting Dental Clinic. Please keep this receipt for your records.'
+  },
+  fontTheme: {
+    type: String,
+    enum: ['classic', 'modern', 'system'],
+    default: 'classic'
   },
   doctors: {
     type: [String],

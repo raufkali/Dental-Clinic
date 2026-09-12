@@ -3,12 +3,12 @@ import { X } from 'lucide-react';
 import { treatmentsAPI, servicesAPI, patientsAPI } from '../services/api';
 import { useClinic } from '../context/ClinicContext';
 
-const AssignTreatmentModal = ({ isOpen, onClose, patientId, onSuccess }) => {
+const AssignTreatmentModal = ({ isOpen, onClose, patientId, defaultServiceId, onSuccess }) => {
   const { formatCurrency, showToast, printReceipt } = useClinic();
   const [services, setServices] = useState([]);
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(patientId || '');
-  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [selectedServiceId, setSelectedServiceId] = useState(defaultServiceId || '');
   const [contractAmount, setContractAmount] = useState('');
   const [initialPaymentAmount, setInitialPaymentAmount] = useState('');
   const [initialPaymentMethod, setInitialPaymentMethod] = useState('Cash');
@@ -21,9 +21,10 @@ const AssignTreatmentModal = ({ isOpen, onClose, patientId, onSuccess }) => {
   useEffect(() => {
     if (isOpen) {
       if (patientId) setSelectedPatientId(patientId);
+      if (defaultServiceId) setSelectedServiceId(defaultServiceId);
       loadServicesAndPatients();
     }
-  }, [isOpen, patientId]);
+  }, [isOpen, patientId, defaultServiceId]);
 
   const loadServicesAndPatients = async () => {
     try {
@@ -31,10 +32,13 @@ const AssignTreatmentModal = ({ isOpen, onClose, patientId, onSuccess }) => {
         servicesAPI.getAll({ status: 'Active' }),
         patientId ? Promise.resolve({ success: true, data: [] }) : patientsAPI.getAll({ status: 'Active' })
       ]);
-      if (sRes.success) {
+      if (sRes.success && sRes.data.length > 0) {
         setServices(sRes.data);
-        if (sRes.data.length > 0 && !selectedServiceId) {
-          handleServiceSelect(sRes.data[0]);
+        const target = (defaultServiceId && sRes.data.find(s => s._id === defaultServiceId))
+          || (selectedServiceId && sRes.data.find(s => s._id === selectedServiceId))
+          || sRes.data[0];
+        if (target) {
+          handleServiceSelect(target);
         }
       }
       if (pRes.success && pRes.data?.length > 0) {

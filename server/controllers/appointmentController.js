@@ -51,7 +51,7 @@ const createAppointment = async (req, res, next) => {
       treatmentId,
       date,
       time,
-      doctor = 'Dr. Ahmed',
+      doctor = '',
       notes = '',
       status = 'Scheduled'
     } = req.body;
@@ -88,24 +88,36 @@ const createAppointment = async (req, res, next) => {
       if (service) serviceName = service.name;
     }
 
-    const appointmentId = await nextAppointmentId();
     const staffName = req.user ? req.user.name : 'Staff';
 
-    const appointment = await Appointment.create({
-      appointmentId,
-      patientId: finalPatientId,
-      patientName: finalPatientName,
-      phone: finalPhone,
-      serviceId: serviceId || undefined,
-      serviceName,
-      treatmentId: treatmentId || undefined,
-      date,
-      time,
-      doctor,
-      notes,
-      status,
-      createdBy: staffName
-    });
+    let appointment = null;
+    let attempts = 0;
+    while (!appointment && attempts < 5) {
+      attempts++;
+      const appointmentId = await nextAppointmentId();
+      try {
+        appointment = await Appointment.create({
+          appointmentId,
+          patientId: finalPatientId,
+          patientName: finalPatientName,
+          phone: finalPhone,
+          serviceId: serviceId || undefined,
+          serviceName,
+          treatmentId: treatmentId || undefined,
+          date,
+          time,
+          doctor: doctor || 'General',
+          notes,
+          status,
+          createdBy: staffName
+        });
+      } catch (createErr) {
+        if (createErr.code === 11000 && attempts < 5) {
+          continue;
+        }
+        throw createErr;
+      }
+    }
 
     await logAudit({
       user: req.user ? req.user.username : 'Staff',
@@ -113,10 +125,10 @@ const createAppointment = async (req, res, next) => {
       entity: 'Appointment',
       entityId: appointment.appointmentId,
       details: {
-        patient: patient.name,
+        patient: finalPatientName,
         date,
         time,
-        doctor
+        service: serviceName
       }
     });
 

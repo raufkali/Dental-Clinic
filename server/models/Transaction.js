@@ -68,7 +68,15 @@ const transactionSchema = new mongoose.Schema({
     index: true
   },
   voidReason: {
-    type: String
+    type: String,
+    default: ''
+  },
+  voidedAt: {
+    type: Date
+  },
+  voidedBy: {
+    type: String,
+    default: ''
   },
   createdBy: {
     type: String,

@@ -319,8 +319,165 @@ const voidPayment = async (req, res, next) => {
   }
 };
 
+// @desc    Update an existing payment and sync linked ledger transaction
+// @route   PUT /api/payments/:id
+const updatePayment = async (req, res, next) => {
+  try {
+    const {
+      amount,
+      paymentType,
+      paymentMethod,
+      paymentDate,
+      reference,
+      notes
+    } = req.body;
+
+    const payment = await Payment.findById(req.params.id)
+      .populate('patientId', 'name patientId')
+      .populate('treatmentId', 'treatmentId contractAmount serviceId');
+
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (amount !== undefined) {
+      const numAmount = Number(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ success: false, message: 'Amount must be a positive number' });
+      }
+      payment.amount = numAmount;
+    }
+
+    if (paymentType) payment.paymentType = paymentType;
+    if (paymentMethod) payment.paymentMethod = paymentMethod;
+    if (paymentDate) {
+      payment.paymentDate = /^\d{4}-\d{2}-\d{2}$/.test(paymentDate)
+        ? new Date(`${paymentDate}T12:00:00.000`)
+        : new Date(paymentDate);
+    }
+    if (reference !== undefined) payment.reference = reference;
+    if (notes !== undefined) payment.notes = notes;
+
+    await payment.save();
+
+    // Sync linked Transaction
+    await Transaction.updateMany(
+      { paymentId: payment._id },
+      {
+        $set: {
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod,
+          transactionDate: payment.paymentDate,
+          reference: payment.reference || payment.paymentId,
+          description: `${payment.patientId?.name || 'Patient'} - Payment (${payment.paymentType})`
+        }
+      }
+    );
+
+    // Re-check treatment status if linked
+    if (payment.treatmentId) {
+      const activePayments = await Payment.find({ treatmentId: payment.treatmentId._id, isVoid: false });
+      const totalPaid = activePayments.reduce((s, p) => s + p.amount, 0);
+      const remaining = Math.max(0, payment.treatmentId.contractAmount - totalPaid);
+      if (remaining === 0) {
+        await Treatment.findByIdAndUpdate(payment.treatmentId._id, { status: 'Completed' });
+      } else {
+        await Treatment.findByIdAndUpdate(payment.treatmentId._id, { status: 'Active' });
+      }
+    }
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: 'UPDATE_PAYMENT',
+      entity: 'Payment',
+      entityId: payment.paymentId,
+      details: {
+        amount: payment.amount,
+        paymentType: payment.paymentType,
+        paymentMethod: payment.paymentMethod
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Payment updated successfully',
+      data: payment
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Permanently delete a payment and remove its linked ledger transaction
+// @route   DELETE /api/payments/:id
+const deletePayment = async (req, res, next) => {
+  try {
+    const payment = await Payment.findById(req.params.id)
+      .populate('patientId', 'name')
+      .populate('treatmentId', 'contractAmount');
+
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    // 1. Delete linked Transaction(s)
+    await Transaction.deleteMany({ paymentId: payment._id });
+
+    // 2. Clear from Installments
+    const installments = await Installment.find({ paymentIds: payment._id });
+    for (const inst of installments) {
+      inst.paymentIds = inst.paymentIds.filter((pid) => String(pid) !== String(payment._id));
+      const remainingPayments = await Payment.find({
+        _id: { $in: inst.paymentIds, $ne: payment._id },
+        isVoid: false
+      });
+      const newPaid = remainingPayments.reduce((s, p) => s + p.amount, 0);
+      inst.paidAmount = newPaid;
+      inst.status = newPaid >= inst.expectedAmount ? 'Paid' : newPaid > 0 ? 'Partially Paid' : 'Due';
+      await inst.save();
+    }
+
+    // 3. Recalculate treatment status
+    if (payment.treatmentId) {
+      const activePayments = await Payment.find({
+        treatmentId: payment.treatmentId._id,
+        _id: { $ne: payment._id },
+        isVoid: false
+      });
+      const newTotalPaid = activePayments.reduce((s, p) => s + p.amount, 0);
+      const remaining = payment.treatmentId.contractAmount - newTotalPaid;
+      if (remaining > 0) {
+        await Treatment.findByIdAndUpdate(payment.treatmentId._id, { status: 'Active' });
+      }
+    }
+
+    // 4. Delete the payment document
+    await Payment.findByIdAndDelete(payment._id);
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: 'DELETE_PAYMENT',
+      entity: 'Payment',
+      entityId: payment.paymentId,
+      details: {
+        amount: payment.amount,
+        patient: payment.patientId?.name
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Payment and associated ledger transactions deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPayments,
   createPayment,
-  voidPayment
+  voidPayment,
+  updatePayment,
+  deletePayment
 };

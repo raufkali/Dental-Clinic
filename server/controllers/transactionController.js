@@ -232,7 +232,200 @@ const createTransaction = async (req, res, next) => {
   }
 };
 
+// @desc    Get single transaction by ID
+// @route   GET /api/transactions/:id
+const getTransactionById = async (req, res, next) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id)
+      .populate('patientId', 'patientId name phone email')
+      .populate({
+        path: 'treatmentId',
+        select: 'treatmentId serviceId contractAmount',
+        populate: { path: 'serviceId', select: 'name type' }
+      })
+      .populate('paymentId')
+      .lean();
+
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    res.json({ success: true, data: transaction });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update transaction
+// @route   PUT /api/transactions/:id
+const updateTransaction = async (req, res, next) => {
+  try {
+    const {
+      type,
+      category,
+      amount,
+      patientId,
+      patientName: manualPatientName,
+      paymentMethod,
+      transactionDate,
+      description,
+      reference
+    } = req.body;
+
+    const transaction = await Transaction.findById(req.params.id);
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    if (type && ['Income', 'Expense'].includes(type)) transaction.type = type;
+    if (category) transaction.category = category.trim();
+    if (amount !== undefined) {
+      const numAmount = Number(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ success: false, message: 'Amount must be greater than zero' });
+      }
+      transaction.amount = numAmount;
+    }
+
+    if (patientId !== undefined) transaction.patientId = patientId || null;
+    if (manualPatientName !== undefined) transaction.patientName = manualPatientName.trim();
+    if (paymentMethod) transaction.paymentMethod = paymentMethod;
+    if (transactionDate) {
+      transaction.transactionDate = /^\d{4}-\d{2}-\d{2}$/.test(transactionDate)
+        ? new Date(`${transactionDate}T12:00:00.000`)
+        : new Date(transactionDate);
+    }
+    if (description) transaction.description = description.trim();
+    if (reference !== undefined) transaction.reference = reference.trim();
+
+    await transaction.save();
+
+    // If this transaction was linked to a Payment record, sync payment amount, method, and date
+    if (transaction.paymentId) {
+      const Payment = require('../models/Payment');
+      await Payment.findByIdAndUpdate(transaction.paymentId, {
+        amount: transaction.amount,
+        paymentMethod: transaction.paymentMethod,
+        paymentDate: transaction.transactionDate
+      });
+    }
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: 'UPDATE_TRANSACTION',
+      entity: 'Transaction',
+      entityId: transaction.transactionId,
+      details: {
+        category: transaction.category,
+        amount: transaction.amount,
+        type: transaction.type
+      }
+    });
+
+    const populated = await Transaction.findById(transaction._id)
+      .populate('patientId', 'patientId name phone')
+      .lean();
+
+    res.json({ success: true, data: populated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete transaction
+// @route   DELETE /api/transactions/:id
+const deleteTransaction = async (req, res, next) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id);
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    // If transaction is linked to a Payment, also clean up payment record
+    if (transaction.paymentId) {
+      const Payment = require('../models/Payment');
+      await Payment.findByIdAndDelete(transaction.paymentId);
+    }
+
+    await Transaction.findByIdAndDelete(req.params.id);
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: 'DELETE_TRANSACTION',
+      entity: 'Transaction',
+      entityId: transaction.transactionId,
+      details: {
+        amount: transaction.amount,
+        type: transaction.type,
+        category: transaction.category
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Transaction deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Void or unvoid a transaction
+// @route   POST /api/transactions/:id/void
+const voidTransaction = async (req, res, next) => {
+  try {
+    const { reason = 'Transaction voided by staff' } = req.body;
+    const transaction = await Transaction.findById(req.params.id);
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    const newVoidStatus = !transaction.isVoid;
+    transaction.isVoid = newVoidStatus;
+    transaction.voidReason = newVoidStatus ? reason : '';
+    transaction.voidedAt = newVoidStatus ? new Date() : null;
+    transaction.voidedBy = newVoidStatus ? (req.user ? req.user.name : 'Staff') : null;
+
+    await transaction.save();
+
+    // If linked to payment, sync void status
+    if (transaction.paymentId) {
+      const Payment = require('../models/Payment');
+      await Payment.findByIdAndUpdate(transaction.paymentId, {
+        isVoid: newVoidStatus,
+        voidReason: newVoidStatus ? reason : '',
+        voidedAt: newVoidStatus ? new Date() : null,
+        voidedBy: newVoidStatus ? (req.user ? req.user.name : 'Staff') : null
+      });
+    }
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: newVoidStatus ? 'VOID_TRANSACTION' : 'UNVOID_TRANSACTION',
+      entity: 'Transaction',
+      entityId: transaction.transactionId,
+      details: { reason }
+    });
+
+    const populated = await Transaction.findById(transaction._id)
+      .populate('patientId', 'patientId name phone')
+      .lean();
+
+    res.json({
+      success: true,
+      message: newVoidStatus ? 'Transaction voided' : 'Transaction unvoided',
+      data: populated
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getTransactions,
-  createTransaction
+  getTransactionById,
+  createTransaction,
+  updateTransaction,
+  deleteTransaction,
+  voidTransaction
 };

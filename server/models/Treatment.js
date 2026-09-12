@@ -60,8 +60,23 @@ const treatmentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Active', 'Completed', 'Cancelled'],
+    enum: ['Active', 'Completed', 'Cancelled', 'Settled'],
     default: 'Active'
+  },
+  isSettled: {
+    type: Boolean,
+    default: false
+  },
+  settledDate: {
+    type: Date
+  },
+  settledReason: {
+    type: String,
+    default: ''
+  },
+  settledBy: {
+    type: String,
+    default: ''
   },
   notes: [treatmentNoteSchema]
 }, {

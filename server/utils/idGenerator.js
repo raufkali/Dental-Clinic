@@ -7,25 +7,36 @@ const Appointment = require('../models/Appointment');
 
 async function getNextId(prefix, model, idField) {
   try {
-    const lastDoc = await model.findOne({ [idField]: new RegExp(`^${prefix}-`) })
-      .sort({ createdAt: -1 })
-      .lean();
+    const docs = await model.find(
+      { [idField]: new RegExp(`^${prefix}-\\d+`) },
+      { [idField]: 1 }
+    ).lean();
 
-    if (!lastDoc || !lastDoc[idField]) {
-      return `${prefix}-001`;
+    let maxNum = 0;
+    for (const doc of docs) {
+      if (doc && doc[idField]) {
+        const parts = doc[idField].split('-');
+        const num = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
     }
 
-    const parts = lastDoc[idField].split('-');
-    const lastNum = parseInt(parts[parts.length - 1], 10);
-    if (isNaN(lastNum)) {
-      return `${prefix}-001`;
+    let nextNum = maxNum + 1;
+    let candidate = `${prefix}-${nextNum.toString().padStart(3, '0')}`;
+
+    // Safety guarantee: Ensure candidate does not already exist
+    while (await model.exists({ [idField]: candidate })) {
+      nextNum += 1;
+      candidate = `${prefix}-${nextNum.toString().padStart(3, '0')}`;
     }
 
-    const nextNum = (lastNum + 1).toString().padStart(3, '0');
-    return `${prefix}-${nextNum}`;
+    return candidate;
   } catch (error) {
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
-    return `${prefix}-${randomSuffix}`;
+    const timestamp = Date.now().toString().slice(-4);
+    const random = Math.floor(10 + Math.random() * 90);
+    return `${prefix}-${timestamp}${random}`;
   }
 }
 

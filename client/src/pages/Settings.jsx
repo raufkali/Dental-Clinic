@@ -1,94 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Save,
-  Database,
-  Download,
-  RotateCcw,
-  Shield,
-  UserPlus,
-  Users,
-  CheckCircle2,
-  AlertTriangle
-} from 'lucide-react';
-import { settingsAPI, backupAPI, authAPI, auditAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { Save, Building, Phone, Mail, MapPin, DollarSign, FileText, User, Type, CheckCircle } from 'lucide-react';
+import { settingsAPI } from '../services/api';
 import { useClinic } from '../context/ClinicContext';
 
 const Settings = () => {
-  const { user } = useAuth();
-  const { settings, setSettings, showToast } = useClinic();
-
-  const [activeTab, setActiveTab] = useState('clinic'); // 'clinic', 'backup', 'users', 'audit'
+  const { settings, setSettings, fontTheme, setFontTheme, showToast } = useClinic();
   const [loading, setLoading] = useState(false);
 
   // Clinic profile form state
   const [formData, setFormData] = useState({
     clinicName: settings.clinicName || 'Dental Clinic',
+    doctorName: settings.doctorName || 'Dr. Tariq Khan',
     clinicAddress: settings.clinicAddress || '',
     phone: settings.phone || '',
     email: settings.email || '',
     currencySymbol: settings.currencySymbol || 'Rs.',
     currency: settings.currency || 'PKR',
-    receiptFooter: settings.receiptFooter || ''
+    receiptFooter: settings.receiptFooter || '',
+    fontTheme: settings.fontTheme || fontTheme || 'classic'
   });
-
-  // Backups state
-  const [backups, setBackups] = useState([]);
-  const [backupLoading, setBackupLoading] = useState(false);
-
-  // Users state
-  const [users, setUsers] = useState([]);
-  const [newUser, setNewUser] = useState({ name: '', username: '', password: '', role: 'Receptionist' });
-
-  // Audit state
-  const [auditLogs, setAuditLogs] = useState([]);
 
   useEffect(() => {
     setFormData({
       clinicName: settings.clinicName || 'Dental Clinic',
+      doctorName: settings.doctorName || 'Dr. Tariq Khan',
       clinicAddress: settings.clinicAddress || '',
       phone: settings.phone || '',
       email: settings.email || '',
       currencySymbol: settings.currencySymbol || 'Rs.',
       currency: settings.currency || 'PKR',
-      receiptFooter: settings.receiptFooter || ''
+      receiptFooter: settings.receiptFooter || '',
+      fontTheme: settings.fontTheme || fontTheme || 'classic'
     });
-  }, [settings]);
+  }, [settings, fontTheme]);
 
-  useEffect(() => {
-    if (activeTab === 'backup') loadBackups();
-    else if (activeTab === 'users' && user?.role === 'Admin') loadUsers();
-    else if (activeTab === 'audit') loadAuditLogs();
-  }, [activeTab]);
-
-  const loadBackups = async () => {
-    try {
-      setBackupLoading(true);
-      const res = await backupAPI.list();
-      if (res.success) setBackups(res.data);
-    } catch (err) {
-      showToast('Failed to list backups', 'error');
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const res = await authAPI.getUsers();
-      if (res.success) setUsers(res.data);
-    } catch (err) {
-      showToast('Failed to load clinic staff', 'error');
-    }
-  };
-
-  const loadAuditLogs = async () => {
-    try {
-      const res = await auditAPI.get({ limit: 50 });
-      if (res.success) setAuditLogs(res.data);
-    } catch (err) {
-      showToast('Failed to load audit logs', 'error');
-    }
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSaveSettings = async (e) => {
@@ -107,359 +55,269 @@ const Settings = () => {
     }
   };
 
-  const handleCreateBackup = async () => {
-    try {
-      setBackupLoading(true);
-      const res = await backupAPI.create();
-      if (res.success) {
-        showToast(`Backup created: ${res.filename}`, 'success');
-        loadBackups();
-      }
-    } catch (err) {
-      showToast(err.message || 'Failed to create backup', 'error');
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  const handleRestoreBackup = async (filename) => {
-    const confirm = window.confirm(
-      `CAUTION: Restoring will overwrite current database records with data from "${filename}". Are you sure you want to proceed?`
-    );
-    if (!confirm) return;
-
-    try {
-      setBackupLoading(true);
-      const res = await backupAPI.restore(filename);
-      if (res.success) {
-        showToast(res.message, 'success');
-        window.location.reload();
-      }
-    } catch (err) {
-      showToast(err.message || 'Failed to restore database', 'error');
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    if (!newUser.name || !newUser.username || !newUser.password) {
-      showToast('All fields are required', 'error');
-      return;
-    }
-    try {
-      const res = await authAPI.createUser(newUser);
-      if (res.success) {
-        showToast(`Staff member "${newUser.name}" added`, 'success');
-        setNewUser({ name: '', username: '', password: '', role: 'Receptionist' });
-        loadUsers();
-      }
-    } catch (err) {
-      showToast(err.message || 'Failed to create user', 'error');
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="max-w-4xl space-y-6">
+      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Clinic Settings</h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Configure clinic profile, currency, local database backup/recovery, and staff accounts
+          Configure your dental clinic identity, doctor profile, currency, and printed receipt footer.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex rounded-xl bg-white border border-slate-200 p-1 shadow-2xs max-w-lg">
-        <button
-          onClick={() => setActiveTab('clinic')}
-          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-            activeTab === 'clinic' ? 'btn-emerald' : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Clinic Profile
-        </button>
-        <button
-          onClick={() => setActiveTab('backup')}
-          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-            activeTab === 'backup' ? 'btn-emerald' : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Database Backup
-        </button>
-        {user?.role === 'Admin' && (
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'users' ? 'btn-emerald' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Staff Accounts
-          </button>
-        )}
-        <button
-          onClick={() => setActiveTab('audit')}
-          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-            activeTab === 'audit' ? 'btn-emerald' : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Audit Log
-        </button>
-      </div>
+      {/* Main Settings Card */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Building className="w-5 h-5 text-emerald-700" />
+            <h2 className="text-base font-bold text-slate-800">Clinic Profile</h2>
+          </div>
+        </div>
 
-      {/* TAB 1: Clinic Profile */}
-      {activeTab === 'clinic' && (
-        <form onSubmit={handleSaveSettings} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4 max-w-2xl">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSaveSettings} className="p-6 space-y-5">
+          {/* Clinic Name & Doctor/Owner Name */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Clinic Name</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 text-slate-400" />
+                <span>Clinic Name *</span>
+              </label>
               <input
                 type="text"
+                name="clinicName"
                 required
                 value={formData.clinicName}
-                onChange={(e) => setFormData({ ...formData, clinicName: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                onChange={handleChange}
+                placeholder="e.g. City Dental Hospital"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800 font-medium"
               />
             </div>
+
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Phone Number</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                <span>Doctor / Owner Name *</span>
+              </label>
               <input
                 type="text"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                name="doctorName"
+                required
+                value={formData.doctorName}
+                onChange={handleChange}
+                placeholder="e.g. Dr. Tariq Khan, BDS"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800 font-medium"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Clinic Address</label>
-            <input
-              type="text"
-              value={formData.clinicAddress}
-              onChange={(e) => setFormData({ ...formData, clinicAddress: e.target.value })}
-              className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
+          {/* Phone & Email */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-slate-400" />
+                <span>Phone Number *</span>
+              </label>
+              <input
+                type="text"
+                name="phone"
+                required
+                value={formData.phone}
+                onChange={handleChange}
+                placeholder="e.g. +92 300 1234567"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-slate-400" />
+                <span>Email Address</span>
+              </label>
               <input
                 type="email"
+                name="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Currency Symbol</label>
-              <input
-                type="text"
-                value={formData.currencySymbol}
-                onChange={(e) => setFormData({ ...formData, currencySymbol: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Currency Code</label>
-              <input
-                type="text"
-                value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                onChange={handleChange}
+                placeholder="e.g. contact@citydental.com"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800"
               />
             </div>
           </div>
 
+          {/* Clinic Address */}
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Receipt Footer Note</label>
-            <textarea
-              rows={2}
-              value={formData.receiptFooter}
-              onChange={(e) => setFormData({ ...formData, receiptFooter: e.target.value })}
-              className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none"
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+              <span>Clinic Physical Address</span>
+            </label>
+            <input
+              type="text"
+              name="clinicAddress"
+              value={formData.clinicAddress}
+              onChange={handleChange}
+              placeholder="e.g. Suite 101, Dental Care Tower, Medical District"
+              className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800"
             />
           </div>
 
-          <div className="pt-2 flex justify-end">
+          {/* Currency Configuration */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5 text-slate-400" />
+                <span>Currency Symbol</span>
+              </label>
+              <input
+                type="text"
+                name="currencySymbol"
+                value={formData.currencySymbol}
+                onChange={handleChange}
+                placeholder="e.g. Rs. or $"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800 font-medium"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Currency Code (ISO)
+              </label>
+              <input
+                type="text"
+                name="currency"
+                value={formData.currency}
+                onChange={handleChange}
+                placeholder="e.g. PKR or USD"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800"
+              />
+            </div>
+          </div>
+
+          {/* Receipt Footer Message */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              <span>Printed Receipt Footer Note</span>
+            </label>
+            <textarea
+              name="receiptFooter"
+              rows={3}
+              value={formData.receiptFooter}
+              onChange={handleChange}
+              placeholder="e.g. Thank you for choosing City Dental. For emergency assistance call our hotline."
+              className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800 resize-none"
+            />
+            <p className="text-2xs text-slate-400 mt-1">
+              This message appears at the bottom of all printed receipts and patient statements.
+            </p>
+          </div>
+
+          {/* Typography & Font Theme Settings (Requested: Bebas Neue for Headings + Fraunces for general text) */}
+          <div className="pt-4 border-t border-slate-100">
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <Type className="w-4 h-4 text-emerald-700" />
+              <span>Typography & Font Style</span>
+            </label>
+            <p className="text-2xs text-slate-500 mb-3">
+              Choose the primary typography theme for clinic headings and body texts. Changes preview immediately.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Option 1: Classic Editorial (Bebas Neue + Fraunces) */}
+              <div
+                onClick={() => {
+                  setFormData((prev) => ({ ...prev, fontTheme: 'classic' }));
+                  setFontTheme('classic');
+                }}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  formData.fontTheme === 'classic'
+                    ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-slate-900">Editorial Classic</span>
+                  {formData.fontTheme === 'classic' && (
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  )}
+                </div>
+                <p className="text-xs font-medium text-emerald-800 tracking-wider font-heading uppercase text-sm">
+                  BEBAS NEUE HEADINGS
+                </p>
+                <p className="text-2xs text-slate-600 mt-1 italic font-body">
+                  Fraunces serif body font
+                </p>
+                <span className="inline-block mt-2 text-2xs px-2 py-0.5 bg-emerald-100/70 text-emerald-800 rounded font-semibold">
+                  Default Requested
+                </span>
+              </div>
+
+              {/* Option 2: Modern Sans (Plus Jakarta Sans) */}
+              <div
+                onClick={() => {
+                  setFormData((prev) => ({ ...prev, fontTheme: 'modern' }));
+                  setFontTheme('modern');
+                }}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  formData.fontTheme === 'modern'
+                    ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-slate-900">Modern Clean</span>
+                  {formData.fontTheme === 'modern' && (
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  )}
+                </div>
+                <p className="text-xs font-bold text-slate-800">
+                  Plus Jakarta Sans
+                </p>
+                <p className="text-2xs text-slate-600 mt-1">
+                  Clean contemporary sans-serif interface
+                </p>
+              </div>
+
+              {/* Option 3: System Standard */}
+              <div
+                onClick={() => {
+                  setFormData((prev) => ({ ...prev, fontTheme: 'system' }));
+                  setFontTheme('system');
+                }}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  formData.fontTheme === 'system'
+                    ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-slate-900">System Native</span>
+                  {formData.fontTheme === 'system' && (
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  )}
+                </div>
+                <p className="text-xs font-medium text-slate-700">
+                  Segoe UI / Inter
+                </p>
+                <p className="text-2xs text-slate-500 mt-1">
+                  Compact operating system default
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="pt-4 border-t border-slate-100 flex justify-end">
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg btn-emerald text-sm font-semibold shadow-2xs"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg btn-emerald text-sm font-semibold shadow-2xs transition-all"
             >
               <Save className="w-4 h-4" />
-              <span>{loading ? 'Saving...' : 'Save Settings'}</span>
+              <span>{loading ? 'Saving Settings...' : 'Save Settings'}</span>
             </button>
           </div>
         </form>
-      )}
-
-      {/* TAB 2: Local Database Backup & Restore */}
-      {activeTab === 'backup' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
-          <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Local MongoDB Data Snapshots</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Generate offline JSON snapshots of all patients, services, payments, and transactions
-              </p>
-            </div>
-            <button
-              onClick={handleCreateBackup}
-              disabled={backupLoading}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg btn-emerald text-xs font-semibold shadow-2xs"
-            >
-              <Database className="w-4 h-4" />
-              <span>{backupLoading ? 'Backing Up...' : 'Create Backup Now'}</span>
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Available Backups</h4>
-            {backups.length === 0 ? (
-              <p className="text-xs text-slate-400 py-4 italic">No backups found yet. Click above to create one.</p>
-            ) : (
-              <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
-                {backups.map((b) => (
-                  <div key={b.filename} className="p-3 flex items-center justify-between hover:bg-slate-50 text-xs">
-                    <div>
-                      <p className="font-mono font-medium text-slate-800">{b.filename}</p>
-                      <p className="text-slate-400 text-2xs mt-0.5">
-                        {new Date(b.createdAt).toLocaleString()} • {b.sizeKB} KB
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleRestoreBackup(b.filename)}
-                      className="px-3 py-1 bg-white border border-slate-300 hover:border-rose-300 text-slate-700 hover:text-rose-700 rounded-md font-medium transition-colors"
-                    >
-                      Restore Data
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: Staff Accounts (Admin only) */}
-      {activeTab === 'users' && user?.role === 'Admin' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Add Staff form */}
-          <form onSubmit={handleCreateUser} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-900">Add New Staff Account</h3>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Full Name</label>
-              <input
-                type="text"
-                required
-                placeholder="Dr. Sara Khan"
-                value={newUser.name}
-                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Username</label>
-              <input
-                type="text"
-                required
-                placeholder="drsara"
-                value={newUser.username}
-                onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Password</label>
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={newUser.password}
-                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Role</label>
-              <select
-                value={newUser.role}
-                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              >
-                <option value="Receptionist">Receptionist</option>
-                <option value="Accountant">Accountant</option>
-                <option value="Doctor">Doctor</option>
-                <option value="Admin">Admin</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="w-full py-2 rounded-lg btn-emerald text-sm font-semibold shadow-2xs"
-            >
-              Create Account
-            </button>
-          </form>
-
-          {/* Existing Staff list */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-            <h3 className="text-sm font-bold text-slate-900">Current Clinic Staff</h3>
-            <div className="divide-y divide-slate-100">
-              {users.map((u) => (
-                <div key={u._id} className="py-2.5 flex items-center justify-between text-xs">
-                  <div>
-                    <p className="font-semibold text-slate-900">{u.name}</p>
-                    <p className="text-slate-400">@{u.username}</p>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
-                    {u.role}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: Audit Log */}
-      {activeTab === 'audit' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-900">System Activity Audit Trail</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                <tr>
-                  <th className="py-2.5 px-4">Timestamp</th>
-                  <th className="py-2.5 px-4">User</th>
-                  <th className="py-2.5 px-4">Action</th>
-                  <th className="py-2.5 px-4">Entity</th>
-                  <th className="py-2.5 px-4">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {auditLogs.map((log) => (
-                  <tr key={log._id} className="hover:bg-slate-50/50">
-                    <td className="py-2 px-4 text-slate-500 whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleString()}
-                    </td>
-                    <td className="py-2 px-4 font-semibold text-slate-800">{log.user}</td>
-                    <td className="py-2 px-4 font-mono text-emerald-800 font-medium">{log.action}</td>
-                    <td className="py-2 px-4 text-slate-600">{log.entity}</td>
-                    <td className="py-2 px-4 text-slate-500 truncate max-w-xs">
-                      {JSON.stringify(log.details || {})}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };

@@ -1,33 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserCheck } from 'lucide-react';
+import { X, UserCheck, Clock } from 'lucide-react';
 import { appointmentsAPI, patientsAPI, servicesAPI } from '../services/api';
 import { useClinic } from '../context/ClinicContext';
 
-const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
+const AddAppointmentModal = ({ isOpen, onClose, selectedDate, defaultServiceId, onSuccess }) => {
   const { showToast } = useClinic();
   const [patients, setPatients] = useState([]);
   const [services, setServices] = useState([]);
   const [patientName, setPatientName] = useState('');
   const [phone, setPhone] = useState('');
   const [patientId, setPatientId] = useState('');
-  const [serviceId, setServiceId] = useState('');
+  const [serviceId, setServiceId] = useState(defaultServiceId || '');
   const [date, setDate] = useState(selectedDate || new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState('09:00');
-  const [doctor, setDoctor] = useState('Dr. Ahmed');
+
+  // 12-Hour AM/PM Time States
+  const [hour, setHour] = useState('10');
+  const [minute, setMinute] = useState('00');
+  const [period, setPeriod] = useState('AM');
+  const [isManualTime, setIsManualTime] = useState(false);
+  const [manualTimeText, setManualTimeText] = useState('');
+
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       if (selectedDate) setDate(selectedDate);
+      if (defaultServiceId) setServiceId(defaultServiceId);
       loadOptions();
     } else {
       setPatientName('');
       setPhone('');
       setPatientId('');
+      setServiceId('');
       setNotes('');
+      setHour('10');
+      setMinute('00');
+      setPeriod('AM');
+      setIsManualTime(false);
+      setManualTimeText('');
     }
-  }, [isOpen, selectedDate]);
+  }, [isOpen, selectedDate, defaultServiceId]);
 
   const loadOptions = async () => {
     try {
@@ -40,7 +53,9 @@ const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
       }
       if (sRes.success) {
         setServices(sRes.data);
-        if (sRes.data.length > 0 && !serviceId) setServiceId(sRes.data[0]._id);
+        if (defaultServiceId && !serviceId) {
+          setServiceId(defaultServiceId);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -66,7 +81,11 @@ const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
       return;
     }
 
-    if (!date || !time) {
+    const formattedTime = isManualTime
+      ? manualTimeText.trim()
+      : `${hour}:${minute} ${period}`;
+
+    if (!date || !formattedTime) {
       showToast('Date and time are required', 'error');
       return;
     }
@@ -79,8 +98,7 @@ const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
         patientId: patientId || undefined,
         serviceId: serviceId || undefined,
         date,
-        time,
-        doctor,
+        time: formattedTime,
         notes: notes.trim(),
         status: 'Scheduled'
       });
@@ -97,11 +115,8 @@ const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
     }
   };
 
-  const timeSlots = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '14:00', '14:30', '15:00', '15:30',
-    '16:00', '16:30', '17:00', '17:30', '18:00'
-  ];
+  const hoursList = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+  const minutesList = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
@@ -173,16 +188,17 @@ const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
             />
           </div>
 
-          {/* Treatment / Service */}
+          {/* Treatment / Service (Optional) */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Treatment / Service
+              Treatment / Service (Optional)
             </label>
             <select
               value={serviceId}
               onChange={(e) => setServiceId(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800"
             >
+              <option value="">-- None / General Consultation --</option>
               {services.map((s) => (
                 <option key={s._id} value={s._id}>
                   {s.name} ({s.type})
@@ -191,9 +207,9 @@ const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
             </select>
           </div>
 
-          {/* Date */}
+          {/* Date Picker */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Date</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Date *</label>
             <input
               type="date"
               required
@@ -203,33 +219,92 @@ const AddAppointmentModal = ({ isOpen, onClose, selectedDate, onSuccess }) => {
             />
           </div>
 
-          {/* Time & Doctor Grid */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Time</label>
-              <select
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800"
+          {/* AM / PM Time Selector */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Appointment Time (AM / PM) *</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsManualTime(!isManualTime)}
+                className="text-2xs text-emerald-700 hover:underline font-medium"
               >
-                {timeSlots.map((slot) => (
-                  <option key={slot} value={slot}>{slot}</option>
-                ))}
-              </select>
+                {isManualTime ? 'Use Time Selector' : 'Type Custom Time'}
+              </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Doctor</label>
-              <select
-                value={doctor}
-                onChange={(e) => setDoctor(e.target.value)}
+            {!isManualTime ? (
+              <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                {/* Hour Select */}
+                <div className="flex-1">
+                  <span className="text-2xs text-slate-400 block mb-0.5">Hour</span>
+                  <select
+                    value={hour}
+                    onChange={(e) => setHour(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm bg-white border border-slate-300 rounded-lg font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                  >
+                    {hoursList.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <span className="text-lg font-bold text-slate-400 pt-4">:</span>
+
+                {/* Minute Select */}
+                <div className="flex-1">
+                  <span className="text-2xs text-slate-400 block mb-0.5">Minute</span>
+                  <select
+                    value={minute}
+                    onChange={(e) => setMinute(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm bg-white border border-slate-300 rounded-lg font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                  >
+                    {minutesList.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* AM / PM Toggle */}
+                <div className="pt-4 flex rounded-lg overflow-hidden border border-slate-300 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setPeriod('AM')}
+                    className={`px-3 py-1.5 text-xs font-bold transition-all ${
+                      period === 'AM'
+                        ? 'btn-emerald text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    AM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPeriod('PM')}
+                    className={`px-3 py-1.5 text-xs font-bold transition-all ${
+                      period === 'PM'
+                        ? 'btn-emerald text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    PM
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <input
+                type="text"
+                placeholder="e.g. 10:15 AM or 04:30 PM"
+                value={manualTimeText}
+                onChange={(e) => setManualTimeText(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800"
-              >
-                <option value="Dr. Ahmed">Dr. Ahmed</option>
-                <option value="Dr. Bilal">Dr. Bilal</option>
-                <option value="Dr. Sara">Dr. Sara</option>
-              </select>
-            </div>
+              />
+            )}
+            <p className="text-2xs text-slate-400 mt-1">
+              Selected time: <strong className="text-slate-700">{isManualTime ? manualTimeText || 'None' : `${hour}:${minute} ${period}`}</strong>
+            </p>
           </div>
 
           {/* Notes */}

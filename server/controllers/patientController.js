@@ -25,11 +25,64 @@ const getPatients = async (req, res, next) => {
       ];
     }
 
-    const patients = await Patient.find(query).sort({ createdAt: -1 });
+    const patients = await Patient.find(query).sort({ createdAt: -1 }).lean();
+
+    // Fetch treatments and payments to compute active involvement for each patient
+    const patientIds = patients.map((p) => p._id);
+    const treatments = await Treatment.find({ patientId: { $in: patientIds } })
+      .populate('serviceId', 'name type')
+      .lean();
+
+    const treatmentIds = treatments.map((t) => t._id);
+    const payments = await Payment.find({
+      treatmentId: { $in: treatmentIds },
+      isVoid: false
+    }).lean();
+
+    const patientsWithInvolvement = patients.map((patient) => {
+      const pTreatments = treatments.filter((t) => String(t.patientId) === String(patient._id));
+      const activeTreatments = pTreatments.filter((t) => t.status === 'Active' && !t.isSettled);
+
+      let totalRemaining = 0;
+      let totalContract = 0;
+      let totalPaid = 0;
+
+      const involvementList = pTreatments.map((t) => {
+        const tPayments = payments.filter((p) => String(p.treatmentId) === String(t._id));
+        const paid = tPayments.reduce((s, p) => s + p.amount, 0);
+        const rem = t.isSettled ? 0 : Math.max(0, t.contractAmount - paid);
+
+        totalContract += t.contractAmount;
+        totalPaid += paid;
+        totalRemaining += rem;
+
+        return {
+          _id: t._id,
+          treatmentId: t.treatmentId,
+          serviceName: t.serviceId?.name || 'Dental Service',
+          serviceType: t.serviceId?.type || 'Standard',
+          status: t.isSettled ? 'Settled' : t.status,
+          contractAmount: t.contractAmount,
+          totalPaid: paid,
+          remainingBalance: rem,
+          isSettled: Boolean(t.isSettled)
+        };
+      });
+
+      return {
+        ...patient,
+        involvement: involvementList,
+        activeTreatmentsCount: activeTreatments.length,
+        totalContract,
+        totalPaid,
+        totalOutstandingBalance: totalRemaining
+      };
+    });
+
     res.json({
       success: true,
-      count: patients.length,
-      data: patients
+      count: patientsWithInvolvement.length,
+      data: patientsWithInvolvement
     });
   } catch (error) {
     next(error);

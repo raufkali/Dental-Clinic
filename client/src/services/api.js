@@ -69,19 +69,28 @@ export const treatmentsAPI = {
   getAll: (params) => api.get('/treatments', { params }),
   getById: (id) => api.get(`/treatments/${id}`),
   create: (data) => api.post('/treatments', data),
+  update: (id, data) => api.put(`/treatments/${id}`, data),
+  delete: (id) => api.delete(`/treatments/${id}`),
   addNote: (id, note) => api.post(`/treatments/${id}/notes`, { note }),
-  updateStatus: (id, status) => api.patch(`/treatments/${id}/status`, { status })
+  updateStatus: (id, status) => api.patch(`/treatments/${id}/status`, { status }),
+  settle: (id, reason) => api.patch(`/treatments/${id}/settle`, { reason })
 };
 
 export const paymentsAPI = {
   getAll: (params) => api.get('/payments', { params }),
   create: (data) => api.post('/payments', data),
+  update: (id, data) => api.put(`/payments/${id}`, data),
+  delete: (id) => api.delete(`/payments/${id}`),
   void: (id, reason) => api.post(`/payments/${id}/void`, { reason })
 };
 
 export const transactionsAPI = {
   getAll: (params) => api.get('/transactions', { params }),
-  create: (data) => api.post('/transactions', data)
+  getById: (id) => api.get(`/transactions/${id}`),
+  create: (data) => api.post('/transactions', data),
+  update: (id, data) => api.put(`/transactions/${id}`, data),
+  delete: (id) => api.delete(`/transactions/${id}`),
+  void: (id, reason) => api.post(`/transactions/${id}/void`, { reason })
 };
 
 export const appointmentsAPI = {

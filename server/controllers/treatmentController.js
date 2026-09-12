@@ -21,10 +21,12 @@ async function getTreatmentFinancials(treatmentId) {
     .lean();
 
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const remainingBalance = Math.max(0, treatment.contractAmount - totalPaid);
-  const progressPercent = treatment.contractAmount > 0
-    ? Number(((totalPaid / treatment.contractAmount) * 100).toFixed(1))
-    : 100;
+  const remainingBalance = treatment.isSettled ? 0 : Math.max(0, treatment.contractAmount - totalPaid);
+  const progressPercent = treatment.isSettled
+    ? 100
+    : (treatment.contractAmount > 0
+        ? Number(((totalPaid / treatment.contractAmount) * 100).toFixed(1))
+        : 100);
 
   const installments = await Installment.find({ treatmentId })
     .sort({ installmentNumber: 1 })
@@ -44,10 +46,11 @@ async function getTreatmentFinancials(treatmentId) {
 // @route   GET /api/treatments
 const getTreatments = async (req, res, next) => {
   try {
-    const { patientId, status } = req.query;
+    const { patientId, serviceId, status } = req.query;
     let query = {};
 
     if (patientId) query.patientId = patientId;
+    if (serviceId) query.serviceId = serviceId;
     if (status && status !== 'All') query.status = status;
 
     const treatments = await Treatment.find(query)
@@ -63,10 +66,12 @@ const getTreatments = async (req, res, next) => {
     const results = treatments.map(t => {
       const tPayments = payments.filter(p => String(p.treatmentId) === String(t._id));
       const totalPaid = tPayments.reduce((sum, p) => sum + p.amount, 0);
-      const remainingBalance = Math.max(0, t.contractAmount - totalPaid);
-      const progressPercent = t.contractAmount > 0
-        ? Number(((totalPaid / t.contractAmount) * 100).toFixed(1))
-        : 100;
+      const remainingBalance = t.isSettled ? 0 : Math.max(0, t.contractAmount - totalPaid);
+      const progressPercent = t.isSettled
+        ? 100
+        : (t.contractAmount > 0
+            ? Number(((totalPaid / t.contractAmount) * 100).toFixed(1))
+            : 100);
 
       return {
         ...t,
@@ -340,11 +345,187 @@ const updateTreatmentStatus = async (req, res, next) => {
   }
 };
 
+// @desc    Mark treatment as fully settled early (forgive remaining balance, no more payments required)
+// @route   PATCH /api/treatments/:id/settle
+const settleTreatment = async (req, res, next) => {
+  try {
+    const { reason = 'Treatment completed early / balance waived by doctor' } = req.body;
+    const treatment = await Treatment.findById(req.params.id);
+    if (!treatment) {
+      return res.status(404).json({ success: false, message: 'Treatment not found' });
+    }
+
+    treatment.isSettled = true;
+    treatment.status = 'Settled';
+    treatment.settledDate = new Date();
+    treatment.settledReason = reason;
+    treatment.settledBy = req.user ? req.user.name : 'Staff';
+
+    // Add note
+    treatment.notes.push({
+      note: `[SETTLED] Treatment marked fully settled early. Reason: ${reason}. Remaining balance waived.`,
+      date: new Date(),
+      createdBy: req.user ? req.user.name : 'Staff'
+    });
+
+    await treatment.save();
+
+    // Mark pending installments as Waived
+    await Installment.updateMany(
+      { treatmentId: treatment._id, status: { $in: ['Due', 'Overdue'] } },
+      { $set: { status: 'Waived', notes: 'Waived due to full early settlement' } }
+    );
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: 'SETTLE_TREATMENT',
+      entity: 'Treatment',
+      entityId: treatment.treatmentId,
+      details: { reason }
+    });
+
+    const fullData = await getTreatmentFinancials(treatment._id);
+
+    res.json({
+      success: true,
+      message: 'Treatment marked as fully settled',
+      data: fullData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update treatment contract details
+// @route   PUT /api/treatments/:id
+const updateTreatment = async (req, res, next) => {
+  try {
+    const {
+      contractAmount,
+      monthlyInstallment,
+      durationMonths,
+      startDate,
+      status,
+      notes
+    } = req.body;
+
+    const treatment = await Treatment.findById(req.params.id);
+    if (!treatment) {
+      return res.status(404).json({ success: false, message: 'Treatment not found' });
+    }
+
+    if (contractAmount !== undefined) {
+      const numContract = Number(contractAmount);
+      if (isNaN(numContract) || numContract <= 0) {
+        return res.status(400).json({ success: false, message: 'Contract amount must be a positive number' });
+      }
+      treatment.contractAmount = numContract;
+    }
+
+    if (monthlyInstallment !== undefined) {
+      treatment.monthlyInstallment = Math.max(0, Number(monthlyInstallment) || 0);
+    }
+
+    if (durationMonths !== undefined) {
+      treatment.durationMonths = Math.max(0, Number(durationMonths) || 0);
+    }
+
+    if (startDate) {
+      treatment.startDate = new Date(startDate);
+    }
+
+    if (status && ['Active', 'Completed', 'Settled', 'Cancelled'].includes(status)) {
+      treatment.status = status;
+      if (status === 'Settled') treatment.isSettled = true;
+      if (status === 'Active') treatment.isSettled = false;
+    }
+
+    if (notes && typeof notes === 'string' && notes.trim()) {
+      treatment.notes.push({
+        note: notes.trim(),
+        date: new Date(),
+        createdBy: req.user ? req.user.name : 'Staff'
+      });
+    }
+
+    await treatment.save();
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: 'UPDATE_TREATMENT',
+      entity: 'Treatment',
+      entityId: treatment.treatmentId,
+      details: {
+        contractAmount: treatment.contractAmount,
+        status: treatment.status
+      }
+    });
+
+    const fullData = await getTreatmentFinancials(treatment._id);
+
+    res.json({
+      success: true,
+      message: 'Treatment updated successfully',
+      data: fullData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete treatment contract and cascade linked records
+// @route   DELETE /api/treatments/:id
+const deleteTreatment = async (req, res, next) => {
+  try {
+    const treatment = await Treatment.findById(req.params.id);
+    if (!treatment) {
+      return res.status(404).json({ success: false, message: 'Treatment not found' });
+    }
+
+    // Delete associated installments
+    await Installment.deleteMany({ treatmentId: treatment._id });
+
+    // Delete associated payments and ledger transactions
+    const payments = await Payment.find({ treatmentId: treatment._id });
+    const paymentIds = payments.map((p) => p._id);
+    await Transaction.deleteMany({
+      $or: [
+        { treatmentId: treatment._id },
+        { paymentId: { $in: paymentIds } }
+      ]
+    });
+    await Payment.deleteMany({ treatmentId: treatment._id });
+
+    // Delete treatment document
+    await Treatment.findByIdAndDelete(treatment._id);
+
+    await logAudit({
+      user: req.user ? req.user.username : 'Staff',
+      action: 'DELETE_TREATMENT',
+      entity: 'Treatment',
+      entityId: treatment.treatmentId,
+      details: {
+        contractAmount: treatment.contractAmount
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Treatment and linked payments/installments deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getTreatments,
   getTreatmentById,
   createTreatment,
+  updateTreatment,
+  deleteTreatment,
   addTreatmentNote,
   updateTreatmentStatus,
+  settleTreatment,
   getTreatmentFinancials
 };
