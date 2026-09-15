@@ -10,7 +10,7 @@ const generateToken = (id) => {
   );
 };
 
-// @desc    Auth user & get token
+// @desc    Auth user & get token (supports username, email, or phone)
 // @route   POST /api/auth/login
 const login = async (req, res, next) => {
   try {
@@ -19,23 +19,71 @@ const login = async (req, res, next) => {
     if (!username || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide both username and password'
+        message: 'Please provide both your email/phone and password'
       });
     }
 
-    const user = await User.findOne({ username: username.toLowerCase() });
+    const cleanInput = username.trim().toLowerCase();
+    let user = await User.findOne({
+      $or: [
+        { username: cleanInput },
+        { email: cleanInput },
+        { phone: username.trim() }
+      ]
+    });
 
-    if (!user || !(await user.matchPassword(password))) {
+    let passwordMatches = user ? await user.matchPassword(password) : false;
+
+    // If local check failed, attempt to authenticate and sync from Problos server if online
+    if (!user || !passwordMatches) {
+      try {
+        const probosRes = await fetch('http://127.0.0.1:5000/api/licenses/desktop-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanInput,
+            password
+          })
+        });
+        const probosData = await probosRes.json();
+        if (probosRes.ok && probosData.success && probosData.data?.user) {
+          const remoteUser = probosData.data.user;
+          const hashedPassword = await User.hashPassword(password);
+          if (!user) {
+            const desiredUsername = remoteUser.email ? remoteUser.email.split('@')[0] : (remoteUser.phone || 'admin');
+            user = await User.create({
+              name: remoteUser.name || 'Admin Doctor',
+              username: desiredUsername.toLowerCase().trim(),
+              email: remoteUser.email ? remoteUser.email.toLowerCase().trim() : null,
+              phone: remoteUser.phone ? remoteUser.phone.trim() : null,
+              passwordHash: hashedPassword,
+              role: 'Admin',
+              active: true
+            });
+          } else {
+            user.passwordHash = hashedPassword;
+            if (remoteUser.phone) user.phone = remoteUser.phone.trim();
+            if (remoteUser.email) user.email = remoteUser.email.toLowerCase().trim();
+            await user.save();
+          }
+          passwordMatches = true;
+        }
+      } catch (err) {
+        // Offline - continue to local validation failure
+      }
+    }
+
+    if (!user || !passwordMatches) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid username or password'
+        message: 'Invalid login credentials'
       });
     }
 
     if (!user.active) {
       return res.status(403).json({
         success: false,
-        message: 'Your account is inactive. Please contact your clinic administrator.'
+        message: 'Your account is inactive. Please contact support.'
       });
     }
 
@@ -53,9 +101,93 @@ const login = async (req, res, next) => {
         _id: user._id,
         name: user.name,
         username: user.username,
-        role: user.role,
+        email: user.email,
+        phone: user.phone,
+        role: user.role || 'Admin',
         token: generateToken(user._id)
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Recover password using registered phone number
+// @route   POST /api/auth/recover
+const recoverPassword = async (req, res, next) => {
+  try {
+    const { phone, newPassword } = req.body;
+
+    if (!phone || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide your registered phone number and new password'
+      });
+    }
+
+    if (newPassword.length < 4) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 4 characters long'
+      });
+    }
+
+    const cleanPhone = phone.trim();
+    let user = await User.findOne({
+      $or: [
+        { phone: cleanPhone },
+        { username: cleanPhone.toLowerCase() }
+      ]
+    });
+
+    // Also attempt to notify/sync with Problos server if online
+    try {
+      const probosRes = await fetch('http://127.0.0.1:5000/api/auth/recover-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          newPassword
+        })
+      });
+      const probosData = await probosRes.json();
+      if (!user && probosRes.ok && probosData.success) {
+        const newHash = await User.hashPassword(newPassword);
+        user = await User.create({
+          name: 'Admin Doctor',
+          username: cleanPhone,
+          phone: cleanPhone,
+          email: probosData.data?.email || null,
+          passwordHash: newHash,
+          role: 'Admin',
+          active: true
+        });
+      }
+    } catch (e) {
+      // Offline fallback
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found matching this phone number.'
+      });
+    }
+
+    user.passwordHash = await User.hashPassword(newPassword);
+    await user.save();
+
+    await logAudit({
+      user: user.username,
+      action: 'PASSWORD_RECOVERED',
+      entity: 'User',
+      entityId: user._id,
+      details: { phone: cleanPhone }
+    });
+
+    res.json({
+      success: true,
+      message: 'Password recovered successfully! You can now log in with your new password.'
     });
   } catch (error) {
     next(error);
@@ -66,7 +198,7 @@ const login = async (req, res, next) => {
 // @route   POST /api/auth/register
 const register = async (req, res, next) => {
   try {
-    const { name, username, password, role = 'Receptionist' } = req.body;
+    const { name, username, password, role = 'Admin', email, phone } = req.body;
 
     if (!name || !username || !password) {
       return res.status(400).json({
@@ -94,8 +226,10 @@ const register = async (req, res, next) => {
     const user = await User.create({
       name: name.trim(),
       username: username.toLowerCase().trim(),
+      email: email ? email.toLowerCase().trim() : null,
+      phone: phone ? phone.trim() : null,
       passwordHash,
-      role: role || 'Receptionist',
+      role: 'Admin',
       active: true
     });
 
@@ -252,5 +386,6 @@ module.exports = {
   getMe,
   getUsers,
   createUser,
-  updateUser
+  updateUser,
+  recoverPassword
 };

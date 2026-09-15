@@ -14,14 +14,25 @@ const userSchema = new mongoose.Schema({
     trim: true,
     lowercase: true
   },
+  phone: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    default: null
+  },
   passwordHash: {
     type: String,
     required: true
   },
   role: {
     type: String,
-    enum: ['Admin', 'Receptionist', 'Accountant', 'Doctor'],
-    default: 'Receptionist'
+    enum: ['Admin'],
+    default: 'Admin'
   },
   active: {
     type: Boolean,

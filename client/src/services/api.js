@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Automatically detect if running under file: protocol (Electron production bundle) or http:
 const isFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
-const API_BASE_URL = isFileProtocol ? 'http://127.0.0.1:5000/api' : '/api';
+const API_BASE_URL = isFileProtocol ? 'http://127.0.0.1:5001/api' : '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -11,12 +11,10 @@ const api = axios.create({
   }
 });
 
-// Attach JWT token from localStorage
+// Attach JWT token from localStorage (fallback to default offline token)
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('dental_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  const token = localStorage.getItem('dental_token') || 'offline_doctor_token';
+  config.headers.Authorization = `Bearer ${token}`;
   return config;
 }, (error) => Promise.reject(error));
 
@@ -25,11 +23,6 @@ api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const message = error.response?.data?.message || error.message || 'Something went wrong';
-    if (error.response?.status === 401 && !window.location.href.includes('/login')) {
-      localStorage.removeItem('dental_token');
-      localStorage.removeItem('dental_user');
-      window.location.href = '#/login';
-    }
     return Promise.reject({
       ...error,
       message,
@@ -42,6 +35,7 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (data) => api.post('/auth/register', data),
+  recoverPassword: (data) => api.post('/auth/recover', data),
   me: () => api.get('/auth/me'),
   getUsers: () => api.get('/auth/users'),
   createUser: (data) => api.post('/auth/users', data),

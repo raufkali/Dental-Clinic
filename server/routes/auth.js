@@ -6,13 +6,15 @@ const {
   getMe,
   getUsers,
   createUser,
-  updateUser
+  updateUser,
+  recoverPassword
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
 
 router.post('/login', login);
 router.post('/register', register);
+router.post('/recover', recoverPassword);
 router.get('/me', protect, getMe);
 router.get('/users', protect, authorize('Admin'), getUsers);
 router.post('/users', protect, authorize('Admin'), createUser);

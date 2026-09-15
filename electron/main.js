@@ -1,9 +1,50 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
+const { execSync } = require('child_process');
 
 let mainWindow;
+
+// Generate deterministic, unforgeable hardware fingerprint
+function getHardwareId() {
+  try {
+    if (process.platform === 'win32') {
+      const output = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid', {
+        encoding: 'utf8',
+        timeout: 2000,
+        windowsHide: true
+      });
+      const match = output.match(/MachineGuid\s+REG_SZ\s+([a-fA-F0-9-]+)/i);
+      if (match && match[1]) {
+        const raw = `WIN-${match[1].trim()}`;
+        return crypto.createHash('sha256').update(raw).digest('hex').substring(0, 24).toUpperCase();
+      }
+    }
+  } catch (err) {
+    console.warn('[HardwareID] Registry MachineGuid query failed, falling back to hardware telemetry:', err.message);
+  }
+
+  // Fallback hardware fingerprinting from MAC, CPU and hostname
+  const interfaces = os.networkInterfaces();
+  let mac = '';
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (!iface.internal && iface.mac && iface.mac !== '00:00:00:00:00:00') {
+        mac = iface.mac;
+        break;
+      }
+    }
+    if (mac) break;
+  }
+
+  const rawFallback = `${os.hostname()}-${os.arch()}-${os.cpus()[0]?.model || ''}-${mac}`;
+  return crypto.createHash('sha256').update(rawFallback).digest('hex').substring(0, 24).toUpperCase();
+}
+
+const getLicenseFilePath = () => path.join(app.getPath('userData'), 'dental_license.json');
 
 // Quick HTTP ping to verify Vite dev server is actually returning HTML
 function pingHttp(url) {
@@ -133,3 +174,70 @@ ipcMain.handle('print-receipt', async () => {
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
+
+// Hardware & License Management Handlers
+ipcMain.handle('get-device-info', () => {
+  return {
+    deviceId: getHardwareId(),
+    deviceName: os.hostname(),
+    platform: process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux'
+  };
+});
+
+ipcMain.handle('save-license', (event, licenseData) => {
+  try {
+    const filePath = getLicenseFilePath();
+    const dataWithTimestamp = {
+      ...licenseData,
+      lastRecordedTimestamp: Date.now()
+    };
+    fs.writeFileSync(filePath, JSON.stringify(dataWithTimestamp, null, 2), 'utf8');
+    return { success: true };
+  } catch (err) {
+    console.error('[Electron] Failed to save license:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('load-license', () => {
+  try {
+    const filePath = getLicenseFilePath();
+    if (!fs.existsSync(filePath)) {
+      return { success: true, data: null };
+    }
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return { success: true, data: parsed };
+  } catch (err) {
+    console.error('[Electron] Failed to load license:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('clear-license', () => {
+  try {
+    const filePath = getLicenseFilePath();
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('open-external', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('close-app', () => {
+  console.log('[Electron] Immediate application closure triggered by license revocation.');
+  app.quit();
+});
+
+

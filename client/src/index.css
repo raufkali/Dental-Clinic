@@ -1,14 +1,10 @@
 @import "tailwindcss";
 :root {
-  --font-heading: 'Bebas Neue', cursive, sans-serif;
-  --font-body: 'Fraunces', serif;
+  --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-[data-font-theme="classic"] {
-  --font-heading: 'Bebas Neue', cursive, sans-serif;
-  --font-body: 'Fraunces', serif;
-}
-
+[data-font-theme="classic"],
 [data-font-theme="modern"] {
   --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -31,16 +27,7 @@
 
   h1, h2, h3, h4, .font-heading {
     font-family: var(--font-heading);
-    letter-spacing: 0.04em;
-  }
-
-  /* When Bebas Neue is active, scale headings appropriately and keep crisp uppercase display */
-  [data-font-theme="classic"] h1,
-  [data-font-theme="classic"] h2,
-  [data-font-theme="classic"] h3,
-  [data-font-theme="classic"] .font-heading {
-    letter-spacing: 0.05em;
-    font-weight: 500;
+    letter-spacing: -0.015em;
   }
 }
 

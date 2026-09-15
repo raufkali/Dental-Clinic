@@ -4,7 +4,7 @@
   "description": "Dental Clinic Management & Accounting Desktop Application",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT,ELECTRON\" -c \"blue,cyan,green\" \"npm run server\" \"npm run client\" \"wait-on http://127.0.0.1:5000/api/health && electron .\"",
+    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT,ELECTRON\" -c \"blue,cyan,green\" \"npm run server\" \"npm run client\" \"wait-on http://127.0.0.1:5001/api/health && electron .\"",
     "dev:web": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT\" -c \"blue,cyan\" \"npm run server\" \"npm run client\"",
     "server": "npm --prefix server run dev",
     "client": "npm --prefix client run dev",

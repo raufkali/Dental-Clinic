@@ -5,7 +5,7 @@ const ClinicContext = createContext(null);
 
 export const ClinicProvider = ({ children }) => {
   const [fontTheme, setFontThemeState] = useState(() => {
-    return localStorage.getItem('dental_font_theme') || 'classic';
+    return localStorage.getItem('dental_font_theme') || 'modern';
   });
 
   const [settings, setSettings] = useState({
@@ -16,7 +16,7 @@ export const ClinicProvider = ({ children }) => {
     currencySymbol: 'Rs.',
     currency: 'PKR',
     receiptFooter: 'Thank you for choosing Dental Clinic.',
-    fontTheme: 'classic'
+    fontTheme: 'modern'
   });
 
   const [toasts, setToasts] = useState([]);

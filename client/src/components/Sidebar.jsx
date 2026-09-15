@@ -9,11 +9,9 @@ import {
   Briefcase,
   FileBarChart,
   Settings,
-  LogOut,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 
 // Tooth Icon component matching the screenshots
@@ -45,7 +43,6 @@ const navItems = [
 ];
 
 const Sidebar = () => {
-  const { logout } = useAuth();
   const { settings } = useClinic();
   const navigate = useNavigate();
 
@@ -59,11 +56,6 @@ const Sidebar = () => {
       localStorage.setItem('sidebar_collapsed', String(next));
       return next;
     });
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
   };
 
   return (
@@ -139,18 +131,16 @@ const Sidebar = () => {
         })}
       </nav>
 
-      {/* User Footer / Logout */}
+      {/* Clinic System Footer */}
       <div className="p-3 border-t border-slate-100">
-        <button
-          onClick={handleLogout}
-          title={isCollapsed ? "Sign Out" : undefined}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:text-rose-700 hover:bg-rose-50 transition-colors ${
-            isCollapsed ? 'justify-center' : ''
-          }`}
-        >
-          <LogOut className="w-5 h-5 shrink-0" />
-          {!isCollapsed && <span>Sign Out</span>}
-        </button>
+        {!isCollapsed ? (
+          <div className="px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-center">
+            <p className="text-2xs font-semibold text-slate-500">PROBLOS DENTAL</p>
+            <p className="text-3xs text-emerald-700 font-bold">100% Offline System</p>
+          </div>
+        ) : (
+          <div className="w-2 h-2 rounded-full bg-emerald-500 mx-auto" title="Offline Active" />
+        )}
       </div>
     </aside>
   );

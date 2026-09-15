@@ -222,58 +222,58 @@ const Settings = () => {
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Option 1: Classic Editorial (Bebas Neue + Fraunces) */}
-              <div
-                onClick={() => {
-                  setFormData((prev) => ({ ...prev, fontTheme: 'classic' }));
-                  setFontTheme('classic');
-                }}
-                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                  formData.fontTheme === 'classic'
-                    ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-slate-900">Editorial Classic</span>
-                  {formData.fontTheme === 'classic' && (
-                    <CheckCircle className="w-4 h-4 text-emerald-600" />
-                  )}
-                </div>
-                <p className="text-xs font-medium text-emerald-800 tracking-wider font-heading uppercase text-sm">
-                  BEBAS NEUE HEADINGS
-                </p>
-                <p className="text-2xs text-slate-600 mt-1 italic font-body">
-                  Fraunces serif body font
-                </p>
-                <span className="inline-block mt-2 text-2xs px-2 py-0.5 bg-emerald-100/70 text-emerald-800 rounded font-semibold">
-                  Default Requested
-                </span>
-              </div>
-
-              {/* Option 2: Modern Sans (Plus Jakarta Sans) */}
+              {/* Option 1: Modern Professional (Plus Jakarta Sans) */}
               <div
                 onClick={() => {
                   setFormData((prev) => ({ ...prev, fontTheme: 'modern' }));
                   setFontTheme('modern');
                 }}
                 className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                  formData.fontTheme === 'modern'
+                  formData.fontTheme === 'modern' || formData.fontTheme === 'classic'
                     ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
                     : 'border-slate-200 bg-white hover:border-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-slate-900">Modern Clean</span>
-                  {formData.fontTheme === 'modern' && (
+                  <span className="text-xs font-bold text-slate-900">Modern Professional</span>
+                  {(formData.fontTheme === 'modern' || formData.fontTheme === 'classic') && (
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  )}
+                </div>
+                <p className="text-xs font-bold text-slate-900">
+                  Plus Jakarta Sans
+                </p>
+                <p className="text-2xs text-slate-600 mt-1">
+                  Executive corporate clinic interface
+                </p>
+                <span className="inline-block mt-2 text-2xs px-2 py-0.5 bg-emerald-100/70 text-emerald-800 rounded font-semibold">
+                  Recommended
+                </span>
+              </div>
+
+              {/* Option 2: Inter Clean */}
+              <div
+                onClick={() => {
+                  setFormData((prev) => ({ ...prev, fontTheme: 'inter' }));
+                  setFontTheme('inter');
+                }}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  formData.fontTheme === 'inter'
+                    ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-slate-900">Inter Clean</span>
+                  {formData.fontTheme === 'inter' && (
                     <CheckCircle className="w-4 h-4 text-emerald-600" />
                   )}
                 </div>
                 <p className="text-xs font-bold text-slate-800">
-                  Plus Jakarta Sans
+                  Inter Sans
                 </p>
                 <p className="text-2xs text-slate-600 mt-1">
-                  Clean contemporary sans-serif interface
+                  Clean neutral medical typography
                 </p>
               </div>
 

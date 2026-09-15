@@ -3,33 +3,33 @@ import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
 
+const DEFAULT_DOCTOR = {
+  name: 'Clinic Doctor',
+  username: 'doctor',
+  email: 'doctor@clinic.local',
+  role: 'Admin'
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('dental_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('dental_user');
+      return saved ? JSON.parse(saved) : DEFAULT_DOCTOR;
+    } catch (e) {
+      return DEFAULT_DOCTOR;
+    }
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('dental_token');
-      if (token) {
-        try {
-          const res = await authAPI.me();
-          if (res.success && res.data) {
-            setUser(res.data);
-            localStorage.setItem('dental_user', JSON.stringify(res.data));
-          }
-        } catch (err) {
-          console.error('[Auth check failed]:', err);
-          logout();
-        }
-      }
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, []);
+    if (!user) {
+      setUser(DEFAULT_DOCTOR);
+      localStorage.setItem('dental_user', JSON.stringify(DEFAULT_DOCTOR));
+    }
+    if (!localStorage.getItem('dental_token')) {
+      localStorage.setItem('dental_token', 'offline_doctor_token');
+    }
+  }, [user]);
 
   const login = async (username, password) => {
     const res = await authAPI.login({ username, password });
