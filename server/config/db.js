@@ -25,6 +25,64 @@ function checkPort(port, host = '127.0.0.1') {
   });
 }
 
+// Locate mongod executable from embedded electron package or system installation
+function findMongodExecutable() {
+  const candidates = [
+    // 1. Packaged electron resources path (production installer / portable exe)
+    process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'mongod.exe') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'electron', 'bin', 'mongod.exe') : null,
+    // 2. Bundled inside project electron/bin directory
+    path.resolve(__dirname, '../../electron/bin/mongod.exe'),
+    path.resolve(__dirname, '../bin/mongod.exe'),
+    path.resolve(process.cwd(), 'electron/bin/mongod.exe'),
+    // 3. Standard system installation fallbacks
+    'C:\\Program Files\\MongoDB\\Server\\8.2\\bin\\mongod.exe',
+    'C:\\Program Files\\MongoDB\\Server\\8.0\\bin\\mongod.exe',
+    'C:\\Program Files\\MongoDB\\Server\\7.0\\bin\\mongod.exe',
+    'C:\\Program Files\\MongoDB\\Server\\6.0\\bin\\mongod.exe'
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+// Get safe, writable database storage directory
+function getDbStorageDir() {
+  const localDbDir = path.resolve(__dirname, '../../data/db');
+  
+  // For production or when running as packaged exe, write to AppData to avoid permission errors
+  const appDataDir = process.env.APPDATA 
+    ? path.join(process.env.APPDATA, 'dental-clinic-system', 'data', 'db')
+    : (process.platform === 'darwin'
+        ? path.join(process.env.HOME || '', 'Library', 'Application Support', 'dental-clinic-system', 'data', 'db')
+        : path.join(process.env.HOME || '', '.dental-clinic-system', 'data', 'db'));
+
+  // If running in production or root data dir is not directly writable
+  if (process.env.NODE_ENV === 'production') {
+    if (!fs.existsSync(appDataDir)) {
+      fs.mkdirSync(appDataDir, { recursive: true });
+    }
+    return appDataDir;
+  }
+
+  // In development, prefer local project data/db if available
+  try {
+    if (!fs.existsSync(localDbDir)) {
+      fs.mkdirSync(localDbDir, { recursive: true });
+    }
+    return localDbDir;
+  } catch (err) {
+    if (!fs.existsSync(appDataDir)) {
+      fs.mkdirSync(appDataDir, { recursive: true });
+    }
+    return appDataDir;
+  }
+}
+
 // Ensure local mongod is running if port 27017 isn't responding
 async function ensureMongoDaemon() {
   const isPortOpen = await checkPort(27017);
@@ -33,31 +91,31 @@ async function ensureMongoDaemon() {
     return;
   }
 
-  console.log('[DB] Port 27017 not open. Attempting to start local mongod process...');
-  const defaultPath = 'C:\\Program Files\\MongoDB\\Server\\8.2\\bin\\mongod.exe';
-  const dbDir = path.resolve(__dirname, '../../data/db');
+  console.log('[DB] Port 27017 not open. Searching for mongod executable...');
+  const mongodPath = findMongodExecutable();
+  const dbDir = getDbStorageDir();
 
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
+  if (mongodPath) {
+    console.log(`[DB] Starting embedded MongoDB daemon: ${mongodPath}`);
+    console.log(`[DB] Database storage directory: ${dbDir}`);
 
-  if (fs.existsSync(defaultPath)) {
-    const mongodProc = spawn(defaultPath, ['--dbpath', dbDir, '--port', '27017'], {
+    const mongodProc = spawn(mongodPath, ['--dbpath', dbDir, '--port', '27017', '--bind_ip', '127.0.0.1'], {
       detached: true,
       stdio: 'ignore'
     });
     mongodProc.unref();
 
     // Wait a few seconds for mongod to initialize
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       await new Promise(r => setTimeout(r, 1000));
       if (await checkPort(27017)) {
         console.log('[DB] Local mongod daemon started successfully.');
         return;
       }
     }
+    console.warn('[DB] MongoDB daemon did not respond within 20s.');
   } else {
-    console.warn('[DB] mongod executable not found at standard path. Please ensure MongoDB service is started.');
+    console.warn('[DB] mongod executable not found at any bundled or system paths. Please ensure MongoDB is started.');
   }
 }
 

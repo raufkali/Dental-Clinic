@@ -144,8 +144,52 @@ async function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
+let backendProcess = null;
+
+async function ensureBackendServer() {
+  const isRunning = await pingHttp('http://127.0.0.1:5001/api/health');
+  if (isRunning) {
+    console.log('[Electron] Backend Express server is already running on port 5001.');
+    return true;
+  }
+
+  console.log('[Electron] Backend server not active. Spawning embedded server process...');
+  const serverCandidates = [
+    path.join(__dirname, '../server/server.js'),
+    path.join(process.resourcesPath || '', 'server/server.js'),
+    path.join(app.getAppPath(), 'server/server.js')
+  ];
+
+  const serverPath = serverCandidates.find((p) => p && fs.existsSync(p));
+  if (!serverPath) {
+    console.warn('[Electron] Could not locate server.js at candidates:', serverCandidates);
+    return false;
+  }
+
+  const { fork } = require('child_process');
+  backendProcess = fork(serverPath, [], {
+    env: { ...process.env, PORT: '5001', NODE_ENV: 'production' },
+    stdio: 'ignore'
+  });
+
+  backendProcess.on('error', (err) => {
+    console.error('[Electron] Failed to start backend server:', err);
+  });
+
+  for (let i = 0; i < 25; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    if (await pingHttp('http://127.0.0.1:5001/api/health')) {
+      console.log('[Electron] Embedded backend server is online and ready.');
+      return true;
+    }
+  }
+
+  return false;
+}
+
+app.whenReady().then(async () => {
+  await ensureBackendServer();
+  await createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -154,7 +198,22 @@ app.whenReady().then(() => {
   });
 });
 
+app.on('before-quit', () => {
+  if (backendProcess) {
+    try {
+      backendProcess.kill();
+    } catch (e) {}
+    backendProcess = null;
+  }
+});
+
 app.on('window-all-closed', () => {
+  if (backendProcess) {
+    try {
+      backendProcess.kill();
+    } catch (e) {}
+    backendProcess = null;
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -237,6 +296,20 @@ ipcMain.handle('open-external', async (event, url) => {
 
 ipcMain.handle('close-app', () => {
   console.log('[Electron] Immediate application closure triggered by license revocation.');
+  try {
+    const filePath = getLicenseFilePath();
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (e) {}
+
+  if (backendProcess) {
+    try {
+      backendProcess.kill();
+    } catch (e) {}
+    backendProcess = null;
+  }
+
   app.quit();
 });
 
