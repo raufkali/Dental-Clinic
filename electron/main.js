@@ -61,12 +61,15 @@ function pingHttp(url) {
 }
 
 async function getAvailableDevUrl() {
+  const hosts = ['127.0.0.1', 'localhost'];
   const ports = [5173, 5174, 5175];
-  for (const port of ports) {
-    const isLive = await pingHttp(`http://127.0.0.1:${port}/`);
-    if (isLive) {
-      console.log(`[Electron] Connected to live Vite dev server on port ${port}`);
-      return `http://127.0.0.1:${port}`;
+  for (const host of hosts) {
+    for (const port of ports) {
+      const isLive = await pingHttp(`http://${host}:${port}/`);
+      if (isLive) {
+        console.log(`[Electron] Connected to live Vite dev server on ${host}:${port}`);
+        return `http://${host}:${port}`;
+      }
     }
   }
   return null;
@@ -78,7 +81,6 @@ async function createWindow() {
     height: 840,
     minWidth: 1024,
     minHeight: 700,
-    backgroundColor: '#f8fafc',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -102,10 +104,13 @@ async function createWindow() {
   // Attempt to connect to dev server first, or load built dist files
   let devUrl = await getAvailableDevUrl();
 
-  // Retry once if server is still starting up
-  if (!devUrl) {
-    await new Promise((r) => setTimeout(r, 1200));
-    devUrl = await getAvailableDevUrl();
+  // Retry up to 12 times (12s) if dev server is still starting up
+  if (!devUrl && process.env.NODE_ENV !== 'production') {
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      devUrl = await getAvailableDevUrl();
+      if (devUrl) break;
+    }
   }
 
   if (devUrl) {
