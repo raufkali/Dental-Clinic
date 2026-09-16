@@ -13,7 +13,14 @@ const Topbar = () => {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-end gap-4 shrink-0">
+    <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between gap-4 shrink-0">
+      {/* Slogan */}
+      <div className="hidden sm:block">
+        <p className="text-xs font-semibold text-slate-500">
+          DentSuite <span className="font-normal text-slate-400">• Your Practice, Perfectly Managed.</span>
+        </p>
+      </div>
+
       {/* Search Bar */}
       <div className="relative w-72">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -25,12 +32,6 @@ const Topbar = () => {
           onKeyDown={handleSearch}
           className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:bg-white transition-all text-slate-800 placeholder-slate-400"
         />
-      </div>
-
-      {/* Standalone Offline Badge */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/70 text-emerald-800 text-xs font-medium">
-        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-        <span>Offline Active</span>
       </div>
     </header>
   );

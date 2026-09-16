@@ -7,8 +7,7 @@ const errorHandler = require('./middleware/errorHandler');
 
 dotenv.config();
 
-// Connect to MongoDB
-connectDB();
+const mongoose = require('mongoose');
 
 const app = express();
 
@@ -26,11 +25,20 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Health check endpoint
+// Health check endpoint with database readiness check
 app.get('/api/health', (req, res) => {
+  const isDbReady = mongoose.connection.readyState === 1;
+  if (!isDbReady) {
+    return res.status(503).json({
+      status: 'database_connecting',
+      ready: false,
+      app: 'DentSuite Management API'
+    });
+  }
   res.json({
     status: 'ok',
-    app: 'Dental Clinic Management API',
+    ready: true,
+    app: 'DentSuite Management API',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   });
@@ -52,11 +60,20 @@ app.use('/api/audit-logs', require('./routes/audit'));
 // Error handling middleware
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
-const server = app.listen(PORT, () => {
-  console.log(`[Server] Dental Clinic Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('[Server] Database initialization failed:', err.message);
+  }
+  app.listen(PORT, () => {
+    console.log(`[Server] DentSuite Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  });
+}
+
+startServer();
 
 process.on('unhandledRejection', (err) => {
   console.error('[Unhandled Rejection]:', err);

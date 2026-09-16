@@ -1,7 +1,7 @@
 {
   "name": "dental-clinic-system",
   "version": "1.0.0",
-  "description": "Dental Clinic Management & Accounting Desktop Application",
+  "description": "DentSuite — Dental Practice Management & Clinical Accounting System",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT,ELECTRON\" -c \"blue,cyan,green\" \"npm run server\" \"npm run client\" \"wait-on http://127.0.0.1:5001/api/health && electron .\"",
@@ -16,8 +16,8 @@
     "install-all": "npm install && npm --prefix server install && npm --prefix client install"
   },
   "build": {
-    "appId": "com.problos.dentalclinic",
-    "productName": "Dental Clinic Management",
+    "appId": "com.problos.dentsuite",
+    "productName": "DentSuite",
     "directories": {
       "output": "dist-electron"
     },

@@ -85,7 +85,7 @@ async function createWindow() {
       contextIsolation: true,
       sandbox: false
     },
-    title: 'Dental Clinic Management & Accounting',
+    title: 'DentSuite — Your Practice, Perfectly Managed.',
     show: false
   });
 

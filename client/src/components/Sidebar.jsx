@@ -73,9 +73,14 @@ const Sidebar = () => {
             <ToothIcon className="w-5 h-5 text-emerald-800" />
           </div>
           {!isCollapsed && (
-            <span className="font-semibold text-slate-800 text-base tracking-tight truncate">
-              {settings.clinicName || 'Dental Clinic'}
-            </span>
+            <div className="min-w-0 leading-tight">
+              <span className="font-bold text-slate-900 text-base tracking-tight block truncate">
+                DentSuite
+              </span>
+              <span className="text-[10px] text-emerald-700 font-medium block truncate">
+                {settings.clinicName || 'Clinic Manager'}
+              </span>
+            </div>
           )}
         </div>
 
@@ -131,15 +136,13 @@ const Sidebar = () => {
         })}
       </nav>
 
-      {/* Clinic System Footer */}
+      {/* Brand & Slogan Footer */}
       <div className="p-3 border-t border-slate-100">
-        {!isCollapsed ? (
-          <div className="px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-center">
-            <p className="text-2xs font-semibold text-slate-500">PROBLOS DENTAL</p>
-            <p className="text-3xs text-emerald-700 font-bold">100% Offline System</p>
+        {!isCollapsed && (
+          <div className="px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200/70 text-center">
+            <p className="text-xs font-bold text-slate-800 tracking-tight">DentSuite</p>
+            <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">Your Practice, Perfectly Managed.</p>
           </div>
-        ) : (
-          <div className="w-2 h-2 rounded-full bg-emerald-500 mx-auto" title="Offline Active" />
         )}
       </div>
     </aside>

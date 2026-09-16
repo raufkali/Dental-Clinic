@@ -1,11 +1,11 @@
 import axios from 'axios';
 
-// Automatically detect if running under file: protocol (Electron production bundle) or http:
-const isFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
-const API_BASE_URL = isFileProtocol ? 'http://127.0.0.1:5001/api' : '/api';
+// The Dental Clinic local Express server always runs on port 5001
+const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://127.0.0.1:5001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
   }
